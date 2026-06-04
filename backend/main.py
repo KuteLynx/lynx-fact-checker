@@ -7,12 +7,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pipeline import verify
+import os
 
 app = FastAPI(title="lynx-fact-checker", version="0.1.0")
 
+# Orígenes permitidos: configurable via env, fallback a dev
+origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:8000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,
     allow_methods=["POST"],
     allow_headers=["*"],
 )

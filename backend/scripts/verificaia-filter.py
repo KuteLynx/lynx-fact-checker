@@ -130,17 +130,29 @@ def clasificar_claim(descripcion: str, bio: str, labels: list) -> dict:
     }
     es_opinion = any(s in texto for s in senales_opinion)
 
-    # Señales de afirmación factual
+    # ─── Señales de afirmación factual ───
+    # NOTA: "es" se maneja por separado con word boundary (\bes\b)
+    # porque en español aparece como substring de muchas palabras
+    # (curiosidades, gatos, atigrados, encantarán, etc.)
     senales_facto = {
-        "es", "es que", "esto es", "esto causa",
+        "es que", "esto es", "esto causa",
         "provoca", "causa", "causa que",
         "aumenta", "reduce", "disminuye",
         "previene", "cura", "trata",
         "contiene", "tiene", "está hecho de",
         "demostrado", "probado", "proven",
         "está comprobado", "está demostrado",
+        # Señales de contenido informativo/divulgativo
+        "datos", "curiosidades", "sabías que",
+        "data", "facts", "did you know",
+        "fun fact", "fun facts",
+        "información", "information",
+        "consejos", "tips",
     }
     es_factual = any(s in texto for s in senales_facto)
+    # Standalone "es" con word boundary para evitar falsos positivos
+    if re.search(r'\bes\b', texto):
+        es_factual = True
 
     factores["falsificable"] = es_factual and not es_opinion
 
@@ -224,10 +236,20 @@ def filtrar(data: dict) -> dict:
         resultado["razon"] = f"Claim concreto detectado (score {claim['score']}/4) con texto disponible"
 
     elif texto_disponible and not claim["es_claim_concreto"]:
-        # Hay texto pero el claim es vago → STOP
-        resultado["decision"] = "STOP"
-        resultado["herramienta"] = "🛑 Ninguna"
-        resultado["razon"] = f"Texto disponible pero claim vago (score {claim['score']}/4, mínimo 2)"
+        # Hay texto (descripción) pero el claim es vago
+        # Si solo tenemos descripción (sin subtítulos ni slides) y el video es largo,
+        # el contenido real está en el audio → Whisper
+        tiene_contenido_accesible = bool(text_slides) or subtitulos
+        if not tiene_contenido_accesible and duracion >= 30:
+            resultado["decision"] = "PASA"
+            resultado["herramienta"] = "🎤 Whisper"
+            resultado["razon"] = (f"Video de {duracion}s sin subtítulos ni slides de texto — "
+                                   "la descripción sugiere contenido informativo "
+                                   "pero el contenido real está en el audio, requiere transcripción")
+        else:
+            resultado["decision"] = "STOP"
+            resultado["herramienta"] = "🛑 Ninguna"
+            resultado["razon"] = f"Texto disponible pero claim vago (score {claim['score']}/4, mínimo 2)"
 
     elif not texto_disponible and duracion >= 30:
         # No hay texto pero el video es largo → Whisper

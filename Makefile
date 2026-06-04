@@ -1,4 +1,4 @@
-.PHONY: dev-backend dev-frontend dev build clean
+.PHONY: dev-backend dev-frontend dev build clean deploy-backend
 
 dev-backend:
 	cd backend && uv run uvicorn main:app --reload --port 8000
@@ -19,3 +19,7 @@ build:
 
 clean:
 	rm -rf frontend/dist backend/.venv
+
+# Producción (backend)
+deploy-backend:
+	cd backend && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}

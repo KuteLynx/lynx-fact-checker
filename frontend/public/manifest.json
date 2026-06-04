@@ -1,0 +1,24 @@
+{
+  "name": "Lynx Fact Checker",
+  "short_name": "LynxFC",
+  "description": "Verifica datos de videos de TikTok con ayuda de Dark Michi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "url": "url"
+    }
+  }
+}
