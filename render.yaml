@@ -7,7 +7,9 @@ services:
     dockerfilePath: Dockerfile
     envVars:
       - key: CORS_ORIGINS
-        value: https://TU_USUARIO.github.io
+        # ⚠️ REEMPLAZAR por la URL del frontend en GitHub Pages
+        # Ejemplo: https://tuusuario.github.io
+        value: "https://CAMBIAR-ESTA-URL.github.io"
       - key: PORT
         value: 8000
       # ⚠️ OPENAI_API_KEY: configurar vía Dashboard de Render como secret

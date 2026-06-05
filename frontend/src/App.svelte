@@ -6,6 +6,68 @@
   let error = $state('');
   let autoVerifying = $state(false);
 
+  // ── PWA install banner ──
+  /** @type {any} */
+  let deferredPrompt = $state(null);
+  let showInstallBanner = $state(false);
+  let isIOS = $state(false);
+  let isStandalone = $state(false);
+
+  $effect(() => {
+    // Detectar si ya está instalada (standalone)
+    if (typeof navigator !== 'undefined') {
+      /** @type {any} */
+      const nav = navigator;
+      isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        nav.standalone === true;
+    }
+
+    // Detectar iOS (no soporta beforeinstallprompt)
+    if (typeof navigator !== 'undefined') {
+      /** @type {any} */
+      const nav = navigator;
+      /** @type {any} */
+      const win = window;
+      isIOS = /iphone|ipad|ipod/i.test(nav.userAgent) && !win.MSStream;
+    }
+
+    // Escuchar beforeinstallprompt (Chrome/Android/Desktop)
+    /** @param {any} e */
+    function onBeforeInstall(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!isStandalone) showInstallBanner = true;
+    }
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+
+    // Si ya está instalada, ocultar el banner
+    if (isStandalone) showInstallBanner = false;
+
+    // Detectar instalación exitosa
+    window.addEventListener('appinstalled', () => {
+      showInstallBanner = false;
+      deferredPrompt = null;
+    });
+
+    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+  });
+
+  async function handleInstall() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const result = await deferredPrompt.userChoice;
+      if (result.outcome === 'accepted') {
+        showInstallBanner = false;
+      }
+      deferredPrompt = null;
+    }
+  }
+
+  function dismissBanner() {
+    showInstallBanner = false;
+  }
+
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   const pasos = [
@@ -144,6 +206,30 @@
   <h1>🐱 Lynx Fact Checker</h1>
   <p>Verifica datos de videos de TikTok con ayuda de Dark Michi</p>
 </div>
+
+{#if showInstallBanner && !isStandalone}
+  <div class="install-banner" class:ios={isIOS && !deferredPrompt}>
+    <div class="install-banner-content">
+      <span class="install-icon">🐱</span>
+      <div class="install-text">
+        <strong>Instala Lynx Fact Checker</strong>
+        {#if isIOS && !deferredPrompt}
+          <p>En Safari: <strong>Compartir</strong> → <strong>Agregar a pantalla de inicio</strong></p>
+        {:else}
+          <p>Comparte directo desde TikTok y verifica al instante</p>
+        {/if}
+      </div>
+    </div>
+    <div class="install-banner-actions">
+      {#if isIOS && !deferredPrompt}
+        <button class="install-btn ios-btn" onclick={dismissBanner}>Entendido</button>
+      {:else}
+        <button class="install-btn" onclick={handleInstall}>📲 Instalar</button>
+        <button class="install-dismiss" onclick={dismissBanner}>Ahora no</button>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <div class="tutorial">
   <h2 class="tutorial-title">📋 Cómo compartir un TikTok</h2>
