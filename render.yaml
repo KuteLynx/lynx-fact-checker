@@ -1,14 +1,14 @@
 services:
   - type: web
     name: lynx-fact-checker-api
-    runtime: python
+    runtime: image
     region: oregon
     plan: free
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: Dockerfile
     envVars:
       - key: CORS_ORIGINS
         value: https://TU_USUARIO.github.io
       - key: PORT
         value: 8000
+      # ⚠️ OPENAI_API_KEY: configurar vía Dashboard de Render como secret
+      # Dashboard → Environment → Agregar OPENAI_API_KEY

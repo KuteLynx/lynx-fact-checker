@@ -18,3 +18,7 @@ Thumbs.db
 # Env
 .env
 *.env.local
+
+# Whisper.cpp build
+backend/whisper/build/
+backend/whisper/models/*.bin

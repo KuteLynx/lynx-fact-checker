@@ -3,6 +3,15 @@ Lynx Fact Checker — FastAPI Backend 🐱
 POST /verify → recibe URL de TikTok, ejecuta pipeline, devuelve JSON combinado.
 """
 
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Cargar variables de entorno desde backend/.env (desarrollo local)
+load_dotenv(Path(__file__).parent / ".env")
+
+import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -32,6 +41,8 @@ class VerifyResponse(BaseModel):
     filter: dict | None = None
     combined_text: str | None = None
     whisper_needed: bool = False
+    whisper_output: str | None = None
+    ai_analysis: dict | None = None
     error: str | None = None
 
 

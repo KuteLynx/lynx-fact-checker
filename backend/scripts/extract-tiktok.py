@@ -168,6 +168,8 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
             "language": item.get("textLanguage"),
             "is_ad": item.get("isAd", False),
             "is_aigc": item.get("IsAigc", False),
+            "play_url": video.get("playAddr", ""),
+            "download_url": video.get("downloadAddr", ""),
         },
         "creator": {
             "username": author.get("uniqueId"),
