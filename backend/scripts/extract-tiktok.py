@@ -159,7 +159,7 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
         )
         if not match:
             # Sin SSR disponible — devolver datos básicos del URL
-            return _build_url_only_output(url_info, url)
+            return _build_url_only_output(url_info, url, html[:1500])
 
         raw = json.loads(match.group(1))
         scope = raw.get("__DEFAULT_SCOPE__", {})
@@ -179,7 +179,7 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
 
     if not item:
         # Estructura vacía (TikTok bloqueó SSR)
-        return _build_url_only_output(url_info, url)
+        return _build_url_only_output(url_info, url, html[:1500])
 
     # --- Extracción completa desde itemStruct ---
     output = _build_full_output(item, url)
@@ -202,7 +202,7 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
     return output
 
 
-def _build_url_only_output(url_info: dict, original_url: str) -> dict:
+def _build_url_only_output(url_info: dict, original_url: str, html_sample: str = "") -> dict:
     """Construye un output mínimo solo con la info del URL."""
     output = {
         "extraction_limited": True,
@@ -254,6 +254,8 @@ def _build_url_only_output(url_info: dict, original_url: str) -> dict:
             "Para mejores resultados, proporciona la descripción o el texto del video manualmente."
         ),
     }
+    if html_sample:
+        output["_debug_html_sample"] = html_sample
     return output
 
 
