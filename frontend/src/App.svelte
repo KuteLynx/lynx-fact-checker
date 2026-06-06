@@ -5,6 +5,9 @@
   let result = $state(null);
   let error = $state('');
   let autoVerifying = $state(false);
+  let manualText = $state('');
+  let needsManualText = $state(false);
+  let manualTextSending = $state(false);
 
   // ── PWA install banner ──
   /** @type {any} */
@@ -151,6 +154,8 @@
     loading = true;
     error = '';
     result = null;
+    needsManualText = false;
+    manualText = '';
 
     try {
       const res = await fetch(`${API_URL}/verify`, {
@@ -165,12 +170,47 @@
         error = data.detail || 'Error del servidor';
       } else {
         result = data;
+        // Si la extracción fue limitada, pedir texto manual
+        if (data.extraction_limited) {
+          needsManualText = true;
+        }
       }
     } catch (e) {
       error = 'No se pudo conectar con el servidor. ¿Está corriendo el backend?';
     } finally {
       loading = false;
       autoVerifying = false;
+    }
+  }
+
+  async function verifyWithText() {
+    if (!manualText.trim()) return;
+
+    manualTextSending = true;
+    error = '';
+
+    try {
+      const res = await fetch(`${API_URL}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: url.trim(),
+          text: manualText.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        error = data.detail || 'Error del servidor';
+      } else {
+        result = data;
+        needsManualText = false;
+      }
+    } catch (e) {
+      error = 'No se pudo conectar con el servidor. ¿Está corriendo el backend?';
+    } finally {
+      manualTextSending = false;
     }
   }
 
@@ -240,6 +280,8 @@
   function resetResult() {
     result = null;
     error = '';
+    needsManualText = false;
+    manualText = '';
   }
 
   // Ejecutar al montar el componente
@@ -312,7 +354,40 @@
   </div>
 {/if}
 
-{#if error}
+{#if needsManualText && result && !manualTextSending}
+  <div class="manual-text-card">
+    <div class="manual-text-header">
+      <span>🐱</span>
+      <div>
+        <h3>Dark Michi necesita tu ayuda</h3>
+        <p>TikTok ya no comparte la descripción del video automáticamente. Pega aquí el texto del video (descripción, comentarios, lo que viste) para que pueda analizarlo.</p>
+      </div>
+    </div>
+    {#if result?.extractor?.creator?.username}
+      <p class="manual-text-creator">
+        Video de <strong>@{result.extractor.creator.username}</strong>
+        (ID: {result.extractor.video?.id || 'desconocido'})
+      </p>
+    {/if}
+    <textarea
+      bind:value={manualText}
+      placeholder="Pega aquí la descripción del TikTok, o escribe un resumen de lo que dice el video..."
+      rows="5"
+    ></textarea>
+    <button
+      onclick={verifyWithText}
+      disabled={!manualText.trim() || manualTextSending}
+      class="manual-text-btn"
+    >
+      {manualTextSending ? 'Analizando...' : '🔍 Analizar con este texto'}
+    </button>
+    {#if error}
+      <div class="result-box error">{error}</div>
+    {/if}
+  </div>
+{/if}
+
+{#if error && !needsManualText}
   <div class="result-box error">{error}</div>
 {/if}
 

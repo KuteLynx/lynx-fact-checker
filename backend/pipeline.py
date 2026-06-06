@@ -46,14 +46,14 @@ def _run_extractor(url: str, ocr: bool = False) -> dict:
         return {"error": f"JSON inválido del extractor: {e}"}
 
 
-def verify(url: str) -> dict:
+def verify(url: str, manual_text: str = "") -> dict:
     """
     Pipeline completo:
     1. Ejecutar extractor → metadata JSON
     2. Pasar metadata al filtro → decisión (STOP/PASA + herramienta)
     3. Si herramienta es OCR, re-ejecutar extractor con --ocr
     4. Si herramienta es Whisper, transcribir audio del video
-    5. Combinar texto final (descripción + slides + OCR + Whisper)
+    5. Combinar texto final (descripción + texto manual + slides + OCR + Whisper)
     6. Análisis LLM
     7. Devolver JSON completo
     """
@@ -61,6 +61,9 @@ def verify(url: str) -> dict:
     extractor_data = _run_extractor(url)
     if "error" in extractor_data:
         return {"success": False, "error": extractor_data["error"]}
+
+    # Detectar si la extracción fue limitada (sin datos de TikTok)
+    extraction_limited = extractor_data.get("extraction_limited", False)
 
     # Paso 2: Filtrar
     filter_result = filtrar(extractor_data)
@@ -92,6 +95,8 @@ def verify(url: str) -> dict:
     ocr_block = "\n".join(ocr_texts) if ocr_texts else ""
 
     parts = [desc, slides_text, ocr_block]
+    if manual_text.strip():
+        parts.append(f"[Texto proporcionado por el usuario]:\n{manual_text.strip()}")
     if whisper_text:
         parts.append(f"[Transcripción del audio]:\n{whisper_text}")
 
@@ -101,6 +106,7 @@ def verify(url: str) -> dict:
     response = {
         "success": True,
         "extractor": extractor_data,
+        "extraction_limited": extraction_limited,
         "filter": filter_result,
         "combined_text": combined_text,
     }

@@ -23,6 +23,45 @@ import argparse
 from datetime import datetime
 
 
+def extract_url_info(url: str) -> dict:
+    """
+    Extrae username y video ID desde la URL de TikTok.
+    Funciona sin depender del HTML renderizado.
+
+    Formatos soportados:
+      - https://www.tiktok.com/@username/video/1234567890
+      - https://vm.tiktok.com/XXXXXX/
+      - https://vt.tiktok.com/XXXXXX/
+      - https://m.tiktok.com/v/1234567890
+    """
+    info = {"url": url}
+
+    # Formato: www.tiktok.com/@username/video/{id}
+    m = re.search(r'tiktok\.com/@([^/]+)/video/(\d+)', url)
+    if m:
+        info["username"] = m.group(1)
+        info["video_id"] = m.group(2)
+        info["source"] = "tiktok.com"
+        return info
+
+    # Formato: m.tiktok.com/v/{id}
+    m = re.search(r'm\.tiktok\.com/v/(\d+)', url)
+    if m:
+        info["video_id"] = m.group(1)
+        info["source"] = "m.tiktok.com"
+        return info
+
+    # Formato: vm.tiktok.com/{shortcode}
+    m = re.search(r'(vm|vt)\.tiktok\.com/([^/\s?]+)', url)
+    if m:
+        info["shortcode"] = m.group(2)
+        info["source"] = f"{m.group(1)}.tiktok.com"
+        return info
+
+    info["source"] = "unknown"
+    return info
+
+
 def resolve_url(short_url: str) -> str:
     """Resuelve un shortlink vt.tiktok a la URL real."""
     result = subprocess.run(
@@ -83,11 +122,21 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
         dict con datos estructurados del post
     """
 
-    # Resolver shortlink si es necesario
-    if "vt.tiktok.com" in url:
-        url = resolve_url(url)
+    # Extraer info básica del URL siempre
+    url_info = extract_url_info(url)
 
-    # Obtener HTML (versión mobile para tener datos server-side)
+    if url_info.get("source") == "unknown":
+        return {"error": f"No se pudo interpretar la URL: {url}"}
+
+    # Resolver shortlink si es necesario
+    if url_info.get("source") in ("vm.tiktok.com", "vt.tiktok.com"):
+        resolved = resolve_url(url)
+        if resolved != url:
+            url = resolved
+            # Re-extraer del URL resuelto para tener username/video_id
+            url_info = extract_url_info(url)
+
+    # Intentar extraer datos del HTML (TikTok SSR - puede fallar si no hay SSR)
     result = subprocess.run(
         ["curl", "-sL", "-A",
          "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
@@ -109,7 +158,8 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
             html, re.DOTALL
         )
         if not match:
-            return {"error": "No se pudo extraer datos del video"}
+            # Sin SSR disponible — devolver datos básicos del URL
+            return _build_url_only_output(url_info, url)
 
         raw = json.loads(match.group(1))
         scope = raw.get("__DEFAULT_SCOPE__", {})
@@ -120,16 +170,95 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
                 if item:
                     break
         else:
-            return {"error": "No se encontró itemStruct en los datos"}
+            # No se encontró itemStruct
+            return _build_url_only_output(url_info, url)
     else:
         # Mobile api-data path
         raw = json.loads(match.group(1))
         item = raw.get("videoDetail", {}).get("itemInfo", {}).get("itemStruct", {})
 
     if not item:
-        return {"error": "Estructura del video no encontrada"}
+        # Estructura vacía (TikTok bloqueó SSR)
+        return _build_url_only_output(url_info, url)
 
-    # Extraer datos
+    # --- Extracción completa desde itemStruct ---
+    output = _build_full_output(item, url)
+
+    # OCR para photo posts
+    if ocr and output.get("type") == "photo" and output.get("image_urls"):
+        output["extracted_text"] = []
+        os.makedirs(ocr_images_dir, exist_ok=True)
+        for i, img_url in enumerate(output["image_urls"]):
+            img_path = os.path.join(ocr_images_dir, f"tiktok_slide_{i}.jpg")
+            if download_image(img_url, img_path):
+                text = image_to_text(img_path)
+                if text and not text.startswith("[OCR no disponible"):
+                    output["extracted_text"].append(text)
+                try:
+                    os.remove(img_path)
+                except OSError:
+                    pass
+
+    return output
+
+
+def _build_url_only_output(url_info: dict, original_url: str) -> dict:
+    """Construye un output mínimo solo con la info del URL."""
+    output = {
+        "extraction_limited": True,
+        "type": "video",
+        "url": original_url,
+        "description": "",
+        "video": {
+            "id": url_info.get("video_id"),
+            "duration_sec": None,
+            "created": "N/A",
+            "location": None,
+            "language": None,
+            "is_ad": False,
+            "is_aigc": False,
+            "play_url": "",
+            "download_url": "",
+        },
+        "creator": {
+            "username": url_info.get("username"),
+            "display_name": url_info.get("username"),
+            "bio": "",
+            "verified": False,
+            "followers": 0,
+            "total_videos": 0,
+        },
+        "text_slides": [],
+        "subtitles_available": False,
+        "has_subtitle_text": False,
+        "subtitle_languages": [],
+        "stats": {
+            "likes": 0,
+            "shares": 0,
+            "comments": 0,
+            "views": 0,
+            "saves": 0,
+        },
+        "labels": [],
+        "sponsored": False,
+        "music": {
+            "title": None,
+            "original": False,
+        },
+        "imagePost": False,
+        "image_count": 0,
+        "image_urls": [],
+        "note": (
+            "TikTok ya no incluye datos del video en el HTML. "
+            "El análisis usará solo el URL. "
+            "Para mejores resultados, proporciona la descripción o el texto del video manualmente."
+        ),
+    }
+    return output
+
+
+def _build_full_output(item: dict, url: str) -> dict:
+    """Construye output completo desde itemStruct de TikTok."""
     author = item.get("author", {})
     stats = item.get("stats", {})
     auth_stats = item.get("authorStats", {})
@@ -158,6 +287,7 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
 
     # Armar salida estructurada
     output = {
+        "extraction_limited": False,
         "type": "video",  # Will be "photo" if imagePost detected below
         "url": url,
         "video": {
@@ -211,22 +341,6 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
             for img in images
             if img.get("imageURL", {}).get("urlList")
         ]
-
-        # OCR mode: descargar imágenes y extraer texto
-        if ocr and output["image_urls"]:
-            output["extracted_text"] = []
-            os.makedirs(ocr_images_dir, exist_ok=True)
-            for i, img_url in enumerate(output["image_urls"]):
-                img_path = os.path.join(ocr_images_dir, f"tiktok_slide_{i}.jpg")
-                if download_image(img_url, img_path):
-                    text = image_to_text(img_path)
-                    if text and not text.startswith("[OCR no disponible"):
-                        output["extracted_text"].append(text)
-                    # Limpiar imagen temporal
-                    try:
-                        os.remove(img_path)
-                    except OSError:
-                        pass
     else:
         output["imagePost"] = False
         output["image_count"] = 0

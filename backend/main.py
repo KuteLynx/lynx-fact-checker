@@ -33,11 +33,13 @@ app.add_middleware(
 
 class VerifyRequest(BaseModel):
     url: str
+    text: str | None = None  # Texto opcional que el usuario pega manualmente
 
 
 class VerifyResponse(BaseModel):
     success: bool
     extractor: dict | None = None
+    extraction_limited: bool = False
     filter: dict | None = None
     combined_text: str | None = None
     whisper_needed: bool = False
@@ -48,7 +50,7 @@ class VerifyResponse(BaseModel):
 
 @app.post("/verify", response_model=VerifyResponse)
 async def verify_endpoint(req: VerifyRequest):
-    result = verify(req.url)
+    result = verify(req.url, manual_text=req.text or "")
 
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Error desconocido"))
