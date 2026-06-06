@@ -14,16 +14,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copiar backend y compilar whisper.cpp
-COPY backend/ ./
+# Copiar backend completo (excepto whisper/ que se clona aparte)
+COPY backend/*.py ./
+COPY backend/requirements.txt ./
 
-# Compilar whisper.cpp
-RUN cd whisper && mkdir -p build && cd build && \
-    cmake .. && make -j$(nproc) && \
+# Clonar whisper.cpp completo (el gitlink no lleva archivos reales al clonar)
+RUN git clone --depth=1 https://github.com/ggml-org/whisper.cpp.git /app/whisper && \
+    cd /app/whisper && \
+    cmake -B build && \
+    cmake --build build -j$(nproc) && \
     echo "✅ whisper.cpp compilado"
 
-# Descargar modelo base multilingüe (~142MB, mejor precisión en español)
-RUN cd whisper/models && \
+# Descargar modelo base multilingüe (~142MB)
+RUN cd /app/whisper/models && \
     bash download-ggml-model.sh base && \
     echo "✅ Modelo Whisper descargado"
 
