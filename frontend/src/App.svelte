@@ -99,6 +99,49 @@
     });
   }
 
+  const frasesMichi = [
+    'Dark Michi está arañando el servidor...',
+    'Revisando si el TikTok es puro humo o tiene sustancia...',
+    'Dark Michi movió la cola, eso es buena señal...',
+    'Ssh, Dark Michi está leyendo los comentarios...',
+    'Dark Michi ya tumbó 3 tazas virtuales en esta búsqueda...',
+    'Procesando con patitas en el teclado...',
+    'Dark Michi entrecerró los ojos, esto se pone serio...',
+    'Ejecutando: grep -r "verdad" en el video...',
+    'Dark Michi encontró un bug... era su cola en la pantalla.',
+    'El algoritmo está ronroneando, casi listo...',
+    'Dark Michi hackeó la matrix del TikTok...',
+    'Verificando si el audio tiene más verdad que el video...',
+    'Dark Michi está juzgando silenciosamente tus fuentes...',
+    'Comprobando si el video merece el sello 🐱 o la patada 🦶...',
+    'Dark Michi está dudando de ese dato estadístico...',
+    'Esponjando el pelaje para mejorar la precisión del análisis...',
+    'Dark Michi se está quedando dormido... ¡NO! Era el modo zen de debugging.',
+    'Revisando si el creador del video ha visto memes falsos...',
+    'Aplicando el filtro de sense común versión felina 2.1...',
+    'Dark Michi alzó una ceja. Eso no es buena señal.',
+  ];
+
+  let fraseActual = $state('Dark Michi está trabajando...');
+  let intervaloFrases = /** @type {number | null} */ ($state(null));
+
+  $effect(() => {
+    if (loading) {
+      fraseActual = frasesMichi[Math.floor(Math.random() * frasesMichi.length)];
+      intervaloFrases = setInterval(() => {
+        fraseActual = frasesMichi[Math.floor(Math.random() * frasesMichi.length)];
+      }, 4000);
+    } else {
+      if (intervaloFrases) {
+        clearInterval(intervaloFrases);
+        intervaloFrases = null;
+      }
+    }
+    return () => {
+      if (intervaloFrases) clearInterval(intervaloFrases);
+    };
+  });
+
   async function verify() {
     if (!url.trim()) return;
 
@@ -262,11 +305,7 @@
 {#if loading}
   <div class="spinner-wrap">
     <div class="spinner"></div>
-    {#if autoVerifying}
-      <p>Dark Michi recibió el enlace y está analizando...</p>
-    {:else}
-      <p>Dark Michi está analizando el contenido...</p>
-    {/if}
+    <p>{fraseActual}</p>
   </div>
 {/if}
 
