@@ -196,7 +196,9 @@ def filtrar(data: dict) -> dict:
     }
 
     # ─── Paso 1: Labels de entretenimiento ───
-    labels = [l.lower() for l in data.get("labels", [])]
+    # NOTA: usar (data.get("labels") or []) porque dict.get devuelve None
+    # si la clave existe pero su valor es None, NO el default
+    labels = [l.lower() for l in (data.get("labels") or [])]
     if any(l in LABELS_ENTRETENIMIENTO for l in labels):
         resultado["decision"] = "STOP"
         resultado["herramienta"] = "🛑 Ninguna"
@@ -206,11 +208,11 @@ def filtrar(data: dict) -> dict:
 
     # ─── Paso 2: Detectar tipo de post ───
     es_photo = data.get("type") == "photo"
-    descripcion = data.get("description", "")
-    text_slides = data.get("text_slides", [])
-    bio = data.get("creator", {}).get("bio", "")
-    duracion = data.get("video", {}).get("duration_sec", 0)
-    subtitulos = data.get("subtitles_available", False)
+    descripcion = data.get("description") or ""
+    text_slides = data.get("text_slides") or []
+    bio = data.get("creator", {}).get("bio") or ""
+    duracion = (data.get("video") or {}).get("duration_sec") or 0
+    subtitulos = data.get("subtitles_available") or False
 
     # ─── Paso 3: ¿Hay texto barato? ───
     texto_disponible = bool(descripcion.strip()) or bool(text_slides) or subtitulos
