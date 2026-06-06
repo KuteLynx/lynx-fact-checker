@@ -2,7 +2,9 @@
   "name": "Lynx Fact Checker",
   "short_name": "LynxFC",
   "description": "Verifica datos de videos de TikTok con ayuda de Dark Michi",
+  "id": "/lynx-fact-checker/",
   "start_url": "/lynx-fact-checker/",
+  "scope": "/lynx-fact-checker/",
   "display": "standalone",
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
@@ -29,9 +31,11 @@
     }
   ],
   "share_target": {
-    "action": "/lynx-fact-checker/",
+    "action": "https://kutelynx.github.io/lynx-fact-checker/",
     "method": "GET",
     "params": {
+      "title": "title",
+      "text": "text",
       "url": "url"
     }
   }

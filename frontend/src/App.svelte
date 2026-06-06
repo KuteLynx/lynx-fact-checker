@@ -80,7 +80,10 @@
   // Detectar cuando la app recibe un link compartido
   function detectarCompartido() {
     const params = new URLSearchParams(window.location.search);
-    const sharedUrl = params.get('url');
+    const sharedValue = params.get('url') || params.get('text') || '';
+    const urlMatch = sharedValue.match(/https?:\/\/\S+/);
+    const sharedUrl = urlMatch ? urlMatch[0] : sharedValue;
+
     if (sharedUrl && sharedUrl.trim()) {
       url = sharedUrl.trim();
       autoVerifying = true;
