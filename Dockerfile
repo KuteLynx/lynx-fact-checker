@@ -18,6 +18,7 @@ WORKDIR /app
 # Copiar backend completo (excepto whisper/ que se clona aparte)
 COPY backend/*.py ./
 COPY backend/requirements.txt ./
+COPY backend/scripts/ ./scripts/
 
 # Clonar whisper.cpp completo (el gitlink no lleva archivos reales al clonar)
 RUN git clone --depth=1 https://github.com/ggml-org/whisper.cpp.git /app/whisper && \
