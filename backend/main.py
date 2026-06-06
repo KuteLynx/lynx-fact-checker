@@ -50,6 +50,7 @@ class VerifyResponse(BaseModel):
     extraction_limited: bool = False
     filter: dict | None = None
     combined_text: str | None = None
+    manual_text_status: dict | None = None
     whisper_needed: bool = False
     whisper_output: str | None = None
     ai_analysis: dict | None = None

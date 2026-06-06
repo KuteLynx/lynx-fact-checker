@@ -7,6 +7,7 @@ condicional si el árbol de decisión lo indica.
 
 import json
 import logging
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -15,8 +16,53 @@ from filter_loader import filtrar
 from ai_analyzer import analyze
 
 logger = logging.getLogger(__name__)
-
 SCRIPTS_DIR = Path(__file__).parent / "scripts"
+
+
+def _manual_text_status(manual_text: str, extractor_data: dict) -> dict:
+    """Valida texto pegado como si fuera metadata mínima de TikTok."""
+    text = (manual_text or "").strip()
+    if not text:
+        return {"provided": False, "accepted": False, "reason": "No se proporcionó texto manual."}
+
+    words = re.findall(r"[\wáéíóúüñÁÉÍÓÚÜÑ]+", text.lower())
+    alnum_chars = [c.lower() for c in text if c.isalnum()]
+    word_diversity = len(set(words)) / max(len(words), 1)
+
+    if len(text) < 25 or len(words) < 5:
+        return {"provided": True, "accepted": False, "reason": "Texto manual demasiado corto para validarse como metadata."}
+
+    if len(alnum_chars) < 20 or word_diversity < 0.45 or any(len(w) >= 12 and len(set(w)) <= 4 for w in words):
+        return {"provided": True, "accepted": False, "reason": "Texto manual parece ruido o contenido repetitivo."}
+
+    synthetic_metadata = {
+        "url": extractor_data.get("url", "manual"),
+        "type": extractor_data.get("type", "video"),
+        "description": text,
+        "text_slides": [],
+        "labels": extractor_data.get("labels") or [],
+        "creator": extractor_data.get("creator") or {},
+        "video": extractor_data.get("video") or {},
+        "subtitles_available": False,
+    }
+    manual_filter = filtrar(synthetic_metadata)
+    accepted = manual_filter.get("decision") == "PASA" and manual_filter.get("herramienta") == "🤖 IA directo"
+
+    if not accepted:
+        return {
+            "provided": True,
+            "accepted": False,
+            "reason": "Texto manual no parece contener un claim concreto verificable.",
+            "filter": manual_filter,
+        }
+
+    return {
+        "provided": True,
+        "accepted": True,
+        "reason": "Texto manual validado como metadata con claim verificable.",
+        "filter": manual_filter,
+    }
+
 
 
 def _run_extractor(url: str, ocr: bool = False) -> dict:
@@ -95,8 +141,9 @@ def verify(url: str, manual_text: str = "") -> dict:
     ocr_block = "\n".join(ocr_texts) if ocr_texts else ""
 
     parts = [desc, slides_text, ocr_block]
-    if manual_text.strip():
-        parts.append(f"[Texto proporcionado por el usuario]:\n{manual_text.strip()}")
+    manual_status = _manual_text_status(manual_text, extractor_data)
+    if manual_status["accepted"]:
+        parts.append(f"[Texto proporcionado por el usuario, validado como metadata]:\n{manual_text.strip()}")
     if whisper_text:
         parts.append(f"[Transcripción del audio]:\n{whisper_text}")
 
@@ -109,6 +156,7 @@ def verify(url: str, manual_text: str = "") -> dict:
         "extraction_limited": extraction_limited,
         "filter": filter_result,
         "combined_text": combined_text,
+        "manual_text_status": manual_status,
     }
 
     if not whisper_text and filter_result.get("herramienta") == "🎤 Whisper":

@@ -110,6 +110,113 @@ def image_to_text(path: str, use_easyocr: bool = False) -> str:
         return "[OCR no disponible: instalar easyocr o tesseract]"
 
 
+def _yt_dlp_path() -> str:
+    """Devuelve el yt-dlp portable del proyecto o el del PATH."""
+    local_bin = os.path.join(os.path.dirname(os.path.dirname(__file__)), "yt-dlp")
+    if os.path.exists(local_bin) and os.access(local_bin, os.X_OK):
+        return local_bin
+    return "yt-dlp"
+
+
+def _extract_hashtags(text: str) -> list[str]:
+    """Extrae hashtags simples de la descripción."""
+    return [tag.lower() for tag in re.findall(r"#([\wáéíóúüñÁÉÍÓÚÜÑ-]+)", text or "")]
+
+
+def _fetch_with_yt_dlp(url: str, url_info: dict) -> dict | None:
+    """Fallback de metadata cuando TikTok no entrega SSR desde datacenter."""
+    try:
+        result = subprocess.run(
+            [
+                _yt_dlp_path(),
+                "--dump-single-json",
+                "--skip-download",
+                "--no-playlist",
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+    description = (data.get("description") or data.get("title") or "").strip()
+    timestamp = data.get("timestamp")
+    created_date = (
+        datetime.fromtimestamp(int(timestamp)).strftime("%Y-%m-%d %H:%M:%S")
+        if timestamp else "N/A"
+    )
+
+    username = data.get("uploader") or data.get("channel") or url_info.get("username")
+    video_id = data.get("id") or url_info.get("video_id")
+    hashtags = _extract_hashtags(description)
+
+    return {
+        "extraction_limited": False,
+        "metadata_source": "yt-dlp",
+        "type": "video",
+        "url": data.get("webpage_url") or url,
+        "description": description,
+        "video": {
+            "id": video_id,
+            "duration_sec": data.get("duration") or 0,
+            "created": created_date,
+            "location": None,
+            "language": None,
+            "is_ad": False,
+            "is_aigc": False,
+            "play_url": data.get("url") or "",
+            "download_url": data.get("url") or "",
+        },
+        "creator": {
+            "username": username,
+            "display_name": username,
+            "bio": "",
+            "verified": False,
+            "followers": 0,
+            "total_videos": 0,
+        },
+        "text_slides": [],
+        "subtitles_available": bool(data.get("subtitles") or data.get("automatic_captions")),
+        "has_subtitle_text": False,
+        "subtitle_languages": list((data.get("subtitles") or {}).keys()),
+        "stats": {
+            "likes": data.get("like_count") or 0,
+            "shares": data.get("repost_count") or 0,
+            "comments": data.get("comment_count") or 0,
+            "views": data.get("view_count") or 0,
+            "saves": 0,
+        },
+        "labels": hashtags,
+        "sponsored": False,
+        "music": {
+            "title": data.get("track") or data.get("title"),
+            "original": False,
+        },
+        "imagePost": False,
+        "image_count": 0,
+        "image_urls": [],
+        "note": "Metadata obtenida con yt-dlp porque TikTok no entregó SSR.",
+    }
+
+
+def _fallback_output(url_info: dict, url: str) -> dict:
+    """Intenta yt-dlp antes de rendirse con output mínimo de URL."""
+    yt_output = _fetch_with_yt_dlp(url, url_info)
+    if yt_output:
+        return yt_output
+    return _build_url_only_output(url_info, url)
+
+
 def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp") -> dict:
     """Obtiene los datos relevantes de un video de TikTok.
 
@@ -158,8 +265,8 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
             html, re.DOTALL
         )
         if not match:
-            # Sin SSR disponible — devolver datos básicos del URL
-            return _build_url_only_output(url_info, url, html[:1500])
+            # Sin SSR disponible — intentar yt-dlp antes de rendirse
+            return _fallback_output(url_info, url)
 
         raw = json.loads(match.group(1))
         scope = raw.get("__DEFAULT_SCOPE__", {})
@@ -170,16 +277,16 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
                 if item:
                     break
         else:
-            # No se encontró itemStruct
-            return _build_url_only_output(url_info, url)
+            # No se encontró itemStruct — intentar yt-dlp antes de rendirse
+            return _fallback_output(url_info, url)
     else:
         # Mobile api-data path
         raw = json.loads(match.group(1))
         item = raw.get("videoDetail", {}).get("itemInfo", {}).get("itemStruct", {})
 
     if not item:
-        # Estructura vacía (TikTok bloqueó SSR)
-        return _build_url_only_output(url_info, url, html[:1500])
+        # Estructura vacía (TikTok bloqueó SSR) — intentar yt-dlp antes de rendirse
+        return _fallback_output(url_info, url)
 
     # --- Extracción completa desde itemStruct ---
     output = _build_full_output(item, url)
@@ -202,7 +309,7 @@ def fetch_tiktok_data(url: str, ocr: bool = False, ocr_images_dir: str = "/tmp")
     return output
 
 
-def _build_url_only_output(url_info: dict, original_url: str, html_sample: str = "") -> dict:
+def _build_url_only_output(url_info: dict, original_url: str) -> dict:
     """Construye un output mínimo solo con la info del URL."""
     output = {
         "extraction_limited": True,
@@ -254,8 +361,6 @@ def _build_url_only_output(url_info: dict, original_url: str, html_sample: str =
             "Para mejores resultados, proporciona la descripción o el texto del video manualmente."
         ),
     }
-    if html_sample:
-        output["_debug_html_sample"] = html_sample
     return output
 
 
