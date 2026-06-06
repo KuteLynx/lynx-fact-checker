@@ -15,7 +15,7 @@ self.addEventListener('fetch', (e) => {
   // Si es un share target (tiene ?url=... en la query)
   if (url.searchParams.has('url')) {
     e.respondWith(
-      Response.redirect('/' + url.search, 302)
+      Response.redirect('/lynx-fact-checker/' + url.search, 302)
     );
   }
 });
