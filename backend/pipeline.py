@@ -9,7 +9,6 @@ import json
 import logging
 import subprocess
 import sys
-import shlex
 from pathlib import Path
 
 from filter_loader import filtrar
@@ -23,10 +22,11 @@ SCRIPTS_DIR = Path(__file__).parent / "scripts"
 def _run_extractor(url: str, ocr: bool = False) -> dict:
     """Ejecuta extract-tiktok.py y devuelve el JSON parseado."""
     script = SCRIPTS_DIR / "extract-tiktok.py"
-    cmd = [sys.executable, str(script), shlex.quote(url)]
+    cmd = [sys.executable, str(script), url]
     if ocr:
         cmd.append("--ocr")
 
+    logger.info("Ejecutando extractor: %s", " ".join(cmd))
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -35,7 +35,10 @@ def _run_extractor(url: str, ocr: bool = False) -> dict:
     )
 
     if result.returncode != 0:
-        return {"error": f"Extractor falló: {result.stderr.strip()}"}
+        # El error puede venir en stderr o en stdout (según qué falle)
+        err = result.stderr.strip() or result.stdout.strip() or "Error desconocido"
+        logger.error("Extractor falló (exit %d): %s", result.returncode, err)
+        return {"error": f"Extractor falló: {err}"}
 
     try:
         return json.loads(result.stdout.strip())

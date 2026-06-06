@@ -253,7 +253,7 @@ if __name__ == "__main__":
     data = fetch_tiktok_data(args.url, ocr=args.ocr, ocr_images_dir=args.ocr_dir)
 
     if "error" in data:
-        print(json.dumps({"error": data["error"]}, indent=2, ensure_ascii=False))
+        print(json.dumps({"error": data["error"]}, indent=2, ensure_ascii=False), file=sys.stderr)
         sys.exit(1)
 
     # Print to stdout for piping
