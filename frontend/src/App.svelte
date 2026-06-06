@@ -9,6 +9,14 @@
   let needsManualText = $state(false);
   let manualTextSending = $state(false);
 
+  // ── Validación de URL de TikTok ──
+  const TIKTOK_URL_PATTERN = /^https?:\/\/(?:www\.|vm\.|vt\.|m\.)?tiktok\.com\//i;
+
+  /** @param {string} urlStr */
+  function esLinkTikTok(urlStr) {
+    return TIKTOK_URL_PATTERN.test(urlStr.trim());
+  }
+
   // ── PWA install banner ──
   /** @type {any} */
   let deferredPrompt = $state(null);
@@ -89,8 +97,12 @@
 
     if (sharedUrl && sharedUrl.trim()) {
       url = sharedUrl.trim();
-      autoVerifying = true;
-      verify();
+      if (esLinkTikTok(url)) {
+        autoVerifying = true;
+        verify();
+      } else {
+        error = '🐱 El enlace compartido no es de TikTok. Comparte un link de TikTok (vt.tiktok.com/... o tiktok.com/@usuario/video/...).';
+      }
     }
   }
 
@@ -150,6 +162,12 @@
 
   async function verify() {
     if (!url.trim()) return;
+
+    // Validar que sea link de TikTok antes de mandar al backend
+    if (!esLinkTikTok(url.trim())) {
+      error = '🐱 Este link no es de TikTok. Comparte un link de TikTok (vt.tiktok.com/... o tiktok.com/@usuario/video/...).';
+      return;
+    }
 
     loading = true;
     error = '';

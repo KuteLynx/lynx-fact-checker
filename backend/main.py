@@ -12,6 +12,8 @@ load_dotenv(Path(__file__).parent / ".env")
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
+import re
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -19,6 +21,12 @@ from pipeline import verify
 import os
 
 app = FastAPI(title="lynx-fact-checker", version="0.1.0")
+
+# Patrón para validar que sea URL de TikTok
+TIKTOK_URL_PATTERN = re.compile(
+    r'^https?://(?:www\.|vm\.|vt\.|m\.)?tiktok\.com/',
+    re.IGNORECASE
+)
 
 # Orígenes permitidos: configurable via env, fallback a dev
 origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:8000").split(",")
@@ -50,6 +58,13 @@ class VerifyResponse(BaseModel):
 
 @app.post("/verify", response_model=VerifyResponse)
 async def verify_endpoint(req: VerifyRequest):
+    # Validar que sea URL de TikTok
+    if not TIKTOK_URL_PATTERN.match(req.url.strip()):
+        raise HTTPException(
+            status_code=400,
+            detail="El link no es de TikTok. Comparte un link válido de TikTok (vt.tiktok.com/... o tiktok.com/@usuario/video/...)."
+        )
+
     result = verify(req.url, manual_text=req.text or "")
 
     if not result.get("success"):
